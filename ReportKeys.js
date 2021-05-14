@@ -7,58 +7,6 @@ const GMaxPages = 10000
 //
 //
 //
-async function GetAppNameList() {
-
-  // nrql query from license data to get all accounts/apps for 6.1.0
-  const cQuery = `{
-  actor {
-    account(id: MASTERPRODACCT) {
-      nrql(query: "SELECT count(*) as 'ncnt' FROM NrDailyUsage WHERE apmLanguage='java' and apmAgentVersion = '6.1.0' facet consumingAccountName, apmAppName since 1 day ago limit 2000") {
-        nrql
-        otherResult
-        totalResult
-        results
-      }
-    }
-  }
-}`
-
-  oData = {query:cQuery.replace('MASTERPRODACCT',GmasterProdAccountId),variables:""}
-  console.log('payload:',oData)
-  sURI = 'https://api.newrelic.com/graphql'
-  var options = {
-    method: 'post',
-    url: sURI,
-    data: oData,
-    headers: {'Api-Key': GuserApiKey}
-  }
-
-  console.log('GetAppNameList()-> Nerdgraphing')
-  try {
-    response = await axios(options)
-		if (response.status != 200) {
-      console.log('GetAppNameList()-> failed:',response.status)
-      throw ('axios dead')
-    }
-    if (response.data.errors){
-      console.log('graphql errors:',response.data.errors)
-      throw ('GetAppNameList()->graphql errors')
-    }
-    var rApps = []
-    var aApps = response.data.data.actor.account.nrql.results
-    for (oe of aApps){
-      rApps.push({consumingAccountName:oe.facet[0],appName:oe.facet[1]})
-    }
-    console.log('GetAppNameList()->rApps:',rApps.length,rApps.length > 0 ? rApps[0] : 'nada')
-    return rApps
-  } catch (e) {
-    console.log('GetAppNameList()->caught exception:',e)
-    throw e
-  }
-}
-//
-//
-//
 async function GetEntitiesLoop() {
   const METHODNAME='GetEntitiesLoop'
   var Cursor = {}       //not currently using this
