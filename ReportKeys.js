@@ -3,7 +3,6 @@ const assert = require('assert')
 
 //environmental input
 const GuserApiKey = process.env.NEW_RELIC_USER_API_KEY
-const GTargetTag = 'asv'
 const GMaxPages = 10000
 //
 //
