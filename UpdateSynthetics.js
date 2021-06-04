@@ -6,8 +6,11 @@ const fs = require('fs')
 const GuserApiKey = process.env.NEW_RELIC_USER_API_KEY
 const GMasterUserID = process.env.NEW_RELIC_MASTER_USER_ID
 const GAccountFilterCSV = process.env.NEW_RELIC_ACCOUNT_FILTER_CSV
+const GTargetLocation = '2226777-cof_enterprise_nonprod_minions-799'
+//const GTargetLocation = 'AWS_US_EAST_2'
+const GReadOnly = false
 //
-//
+//  GetAccountList()
 //
 async function GetAccountList() {
   const METHODNAME = 'GetAccountList'
@@ -124,7 +127,7 @@ async function GetKeyList(sMasterUserID) {
 async function GetSyntheticsList(sAccountID, sTargetLocation) {
   const METHODNAME = 'GetSyntheticsList'
   // nrql query from license data to get all accounts/apps for 6.1.0
-  const cQuery = `{
+  const cQueryCOF = `{
   actor {
     account(id: TARGETACCOUNTID) {
       nrql(query: "SELECT count(*) as 'ncnt',uniqueCount(location) as 'ucnt',filter(uniqueCount(location), where locationLabel not like 'cof%') as 'ucnt_notcof',latest(location) as 'exlocation' from SyntheticCheck WHERE locationLabel like 'cof%' and location not like 'TARGETLOCATION' FACET monitorId,monitorName,type since 1 day ago limit 2000") {
@@ -136,8 +139,8 @@ async function GetSyntheticsList(sAccountID, sTargetLocation) {
     }
   }
 }`
-/*
-const cQuery = `{
+/***
+const cQueryTest = `{
 actor {
   account(id: TARGETACCOUNTID) {
     nrql(query: "SELECT count(*) as 'ncnt',uniqueCount(location) as 'ucnt',latest(location) as 'exlocation' from SyntheticCheck WHERE locationLabel not like 'TARGETLOCATION' FACET monitorId,monitorName,type since 1 day ago limit 2000") {
@@ -149,9 +152,9 @@ actor {
   }
 }
 }`
-*/
+***/
 
-  oData = {query:cQuery.replace('TARGETACCOUNTID',sAccountID).replace('TARGETLOCATION',sTargetLocation),variables:""}
+  oData = {query:cQueryCOF.replace('TARGETACCOUNTID',sAccountID).replace('TARGETLOCATION',sTargetLocation),variables:""}
   //console.log('payload:',oData)
   sURI = 'https://api.newrelic.com/graphql'
   var options = {
@@ -189,14 +192,44 @@ actor {
   }
 }
 //
-//  hit the old REST API
+//  Read the REST API
 //
-async function UpdateSyntheticLocation(sApiKey,sAccountID, sMonitorID, sLocation) {
+async function GetSynthetic(sApiKey,sAccountID,sMonitorID) {
+  const METHODNAME = 'GetSynthetic'
+
+  //logit(METHODNAME,'getting',sAccountID, sMonitorID)
+
+  sURI = 'https://synthetics.newrelic.com/synthetics/api/v3/monitors/' + sMonitorID
+  var options = {
+    method: 'get',
+    url: sURI,
+    headers: {'Api-Key': sApiKey}
+  }
+
+  //logit(METHODNAME,'NerdGraphing',options.method,options.url)
+  try {
+    response = await axios(options)
+		if (response.status != 200 && response.status != 204) {
+      logit(METHODNAME,'failed response.status',response.status)
+      console.log('data:',response.data)
+      console.log('options:',options)
+      return false
+    }
+    return response.data
+  } catch (e) {
+    logit(METHODNAME,'caught exception',e)
+    return false
+  }
+}
+//
+//  update through the old REST API
+//
+async function UpdateSyntheticLocation(sApiKey,sAccountID, sMonitorID, alocations) {
   const METHODNAME = 'UpdateSyntheticLocation'
 
-  logit(METHODNAME,'updating monitor',sAccountID, sMonitorID, sLocation)
+  logit(METHODNAME,'updating monitor',sAccountID, sMonitorID, alocations)
 
-  oData={"locations":[sLocation]}
+  oData={"locations":alocations}
   sURI = 'https://synthetics.newrelic.com/synthetics/api/v3/monitors/' + sMonitorID
   var options = {
     method: 'patch',
@@ -245,7 +278,7 @@ class FileLog {
     astring.push(Date.now())
     theargs.forEach((el) => {
       if ( typeof el == 'object'){
-        astring.push('"' + JSON.stringify(el).replace('"','""') + '"')
+        astring.push('"' + JSON.stringify(el).replace(/"/g,'""') + '"')
       } else {astring.push(el)}
     })
     fs.appendFileSync(this.filehandle, astring.join(',')+'\n')
@@ -262,7 +295,7 @@ class FileLog {
     var newargs = [`[${(new Date()).toISOString()}]${mname}()-> ${msg}${theargs.length == 0 ? '' : ':'}`]
     theargs.forEach((el) => {
       if ( typeof el == 'object'){
-        newargs.push('"' + JSON.stringify(el).replace('"','""') + '"')
+        newargs.push('"' + JSON.stringify(el).replace(/"/g,'""') + '"')
       } else {newargs.push(el)}
     })
     fs.appendFileSync(this.filehandle,newargs.join('|||') + '\n')
@@ -291,38 +324,50 @@ async function main() {
   aKeys = await GetKeyList(GMasterUserID)
   //convert array into a map
   aKeys.forEach(el => keymap.set(el.accountId,el.key))
+  logit(METHODNAME,'dumping map',Array.from(keymap.keys()))
 
-  //set the update location target
-  sTargetLocation = '2226780-cof_enterprise_minions-7FD'
-  //sTargetLocation = 'AWS_US_WEST_1'
+
 
   // loop over accounts, get the synthetics and then loop over the synthetics and update
   for (oAcct of aAccounts){
+    var iStart = Date.now()
     logit(METHODNAME,'working on account', oAcct)
     sSecret = keymap.get(oAcct.id)
-    if(sSecret == ''){
+    if(typeof sSecret != 'string'){
       logit(METHODNAME,'!!!i got no key, skipping entire account!!!', oAcct)
-      continue
+      throw('!!!where is my secret!!!')
     }
-    aSyn = await GetSyntheticsList(oAcct.id, sTargetLocation)
+    aSyn = await GetSyntheticsList(oAcct.id, GTargetLocation)
     if(aSyn.length >= 2000)
     {
       logit(METHODNAME,'!!!hit the wall - die hard!!! Syn Query returned 2,000')
       throw('!!!hit the wall - die hard!!! Syn Query returned 2,000')
     }
+
     for (oSyn of aSyn){
+      await new Promise(resolve => setTimeout(resolve, 250))
       mastercount++
       var bRet = false
-      if(oSyn.uLocationCount_NotCOF > 0){
-        logit(METHODNAME,'Danger Will Robinson -> Synthetic has split locations',oSyn)
-      } else {
-        //
-        // Tip of the spear
-        //
-        //bRet = await UpdateSyntheticLocation(sSecret,oAcct.id,oSyn.monitorId,sTargetLocation))
+      var originallocations = [], newlocations = []
+      bRet = await GetSynthetic(sSecret, oAcct.id,oSyn.monitorId)
+      if (typeof bRet == 'object'){
+          originallocations = bRet.locations
+          for (var ii=0; ii < originallocations.length;ii++){
+            newlocations.push(originallocations[ii])
+            if (newlocations[ii].toLowerCase().indexOf('-cof_') > -1){
+              newlocations[ii] = GTargetLocation
+            }
+          }
+          //
+          // Tip of the spear
+          //
+          if (GReadOnly === false){
+            bRet = await UpdateSyntheticLocation(sSecret,oAcct.id,oSyn.monitorId,newlocations)
+          }
       }
-      actionlog.logdata(bRet==true ? 'success' : 'failed',oAcct.id,oSyn.monitorId,oSyn.monitorName)
+      actionlog.logdata(bRet==true ? 'success' : 'failed',oAcct.id,oSyn.monitorId,oSyn.monitorName,originallocations,newlocations)
     }
+    logit(METHODNAME,'processed # in sec',aSyn.length,((Date.now()-iStart)/1000))
   }
   actionlog.close()
   logit(METHODNAME,'MasterCount',mastercount)
