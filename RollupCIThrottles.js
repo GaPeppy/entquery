@@ -151,7 +151,7 @@ async function main() {
   var aAccounts = await GetAccountList()
   var aRecords = await GetReportData(aAccounts)
   var bdone = await UploadToMaster(aRecords)
-  console.log('report',aReport)
+  console.log('report',aRecords)
 
   logit(METHODNAME,'MasterCount',aRecords.length)
 }
