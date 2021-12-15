@@ -200,7 +200,7 @@ const cnextCursor = `{
       newel.reporting = oe.reporting
       newel.maxAgentVersion = 'null'
       newel.minAgentVersion = 'null'
-      if(oe.runningAgentVersions != null){
+      if(oe.runningAgentVersions != null && oe.runningAgentVersions.maxVersion != null){
         newel.maxAgentVersion = oe.runningAgentVersions.maxVersion
         newel.minAgentVersion = oe.runningAgentVersions.minVersion
       }
