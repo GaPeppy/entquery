@@ -109,7 +109,12 @@ async function GetAPMServices(Cursor) {
           }
           domain
           ... on ApmApplicationEntityOutline {
+            name
             applicationId
+            runningAgentVersions {
+              maxVersion
+              minVersion
+            }
           }
           guid
         }
@@ -140,6 +145,10 @@ const cnextCursor = `{
           ... on ApmApplicationEntityOutline {
             name
             applicationId
+            runningAgentVersions {
+              maxVersion
+              minVersion
+            }
           }
           guid
         }
@@ -178,7 +187,7 @@ const cnextCursor = `{
 
     var aApps = response.data.data.actor.entitySearch.results.entities
     //debug log
-    //console.log('first element:',aApps[0])
+    console.log('first element:',aApps[0])
 
     var aRes = []
     for (oe of aApps){
@@ -188,7 +197,14 @@ const cnextCursor = `{
       newel.NrAccountName = oe.account.name
       newel.applicationId = oe.applicationId
       newel.domain = oe.domain
-      GTagArray.forEach(item=> newel[item.toUpperCase()] = 'blank')
+      newel.reporting = oe.reporting
+      newel.maxAgentVersion = 'null'
+      newel.minAgentVersion = 'null'
+      if(oe.runningAgentVersions != null){
+        newel.maxAgentVersion = oe.runningAgentVersions.maxVersion
+        newel.minAgentVersion = oe.runningAgentVersions.minVersion
+      }
+      GTagArray.forEach(item=> newel[item.toUpperCase()] = 'null')
       for (ot of oe.tags){
         if(GTagMap.has(ot.key.toLowerCase())){
           newel[GTagMap.get(ot.key.toLowerCase())] = ot.values[0]  //could have multiple ASV values, picking first one
