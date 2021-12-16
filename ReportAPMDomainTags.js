@@ -4,7 +4,7 @@ const fs = require('fs')
 //environmental input
 const GuserApiKey = process.env.NEW_RELIC_USER_API_KEY
 //const GmasterProdAccountId = process.env.NEW_RELIC_PRODMASTER_ACCOUNT_ID
-const GTagArray = ['asv','ba','language', 'owner_contact', 'cmdb_environment']
+const GTagArray = ['asv','ba', 'owner_contact', 'cmdb_environment']
 const GTagMap = new Map()
 const GMaxPages = 10000
 //load map from array
@@ -111,6 +111,7 @@ async function GetAPMServices(Cursor) {
           ... on ApmApplicationEntityOutline {
             name
             applicationId
+            language
             runningAgentVersions {
               maxVersion
               minVersion
@@ -145,6 +146,7 @@ const cnextCursor = `{
           ... on ApmApplicationEntityOutline {
             name
             applicationId
+            language
             runningAgentVersions {
               maxVersion
               minVersion
@@ -198,6 +200,7 @@ const cnextCursor = `{
       newel.applicationId = oe.applicationId
       newel.domain = oe.domain
       newel.reporting = oe.reporting
+      newel.language = oe.language
       newel.maxAgentVersion = 'null'
       newel.minAgentVersion = 'null'
       if(oe.runningAgentVersions != null && oe.runningAgentVersions.maxVersion != null){
